@@ -1,0 +1,6 @@
+c:\users\sérgio\Source\bloomFilter\bin\Debug\bloomFilter.exe.config
+c:\users\sérgio\Source\bloomFilter\obj\Debug\bloomFilter.csprojResolveAssemblyReference.cache
+c:\users\sérgio\Source\bloomFilter\bin\Debug\bloomFilter.exe
+c:\users\sérgio\Source\bloomFilter\bin\Debug\bloomFilter.pdb
+c:\users\sérgio\Source\bloomFilter\obj\Debug\bloomFilter.exe
+c:\users\sérgio\Source\bloomFilter\obj\Debug\bloomFilter.pdb
