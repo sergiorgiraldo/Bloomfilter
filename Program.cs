@@ -14,7 +14,8 @@ namespace bloomFilter
             int capacity = 2000000;
             var filter = new Filter<string>(capacity);
             filter.Add("content");
-            filter.Contains("content");
+            Console.WriteLine("contains 'content'?" + filter.Contains("content"));
+            Console.WriteLine("contains 'dummy'?" + filter.Contains("dummy"));
 
             Console.ReadLine();
         }
