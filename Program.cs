@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections;
+using System.Security.Cryptography;
+using System.Text;
 
 /// <summary>
 /// from https://archive.codeplex.com/?p=bloomfilter#BloomFilter/Filter.cs
@@ -12,20 +14,123 @@ namespace bloomFilter
         static void Main(string[] args)
         {
             int capacity = 2000000;
+
+            Console.WriteLine("*******MSDN implementation");
             var filter = new Filter<string>(capacity);
             filter.Add("content");
             Console.WriteLine("contains 'content'?" + filter.Contains("content"));
             Console.WriteLine("contains 'dummy'?" + filter.Contains("dummy"));
+            Console.WriteLine("contains 'dumy'?" + filter.Contains("dumy"));
+
+            Console.WriteLine("*******My implementation");
+            var myFilter = new MyFilter(capacity);
+            myFilter.Add("content");
+            Console.WriteLine("contains 'content'?" + myFilter.Contains("content"));
+            Console.WriteLine("contains 'dummy'?" + myFilter.Contains("dummy")); 
+            Console.WriteLine("contains 'dumy'?" + myFilter.Contains("dumy"));
 
             Console.ReadLine();
+
+        }
+    }
+
+    public class MyFilter
+    {
+        private readonly int _hashFunctionCount;
+        private readonly BitArray _hashBits;
+
+        public MyFilter(int capacity)
+        {
+            // validate the params are in range
+            if (capacity < 1)
+            {
+                throw new ArgumentOutOfRangeException("capacity", capacity, "capacity must be > 0");
+            }
+
+            float errorRate = BestErrorRate(capacity);
+            int m = BestM(capacity, errorRate);
+            int k = BestK(capacity, errorRate);
+
+            _hashFunctionCount = k;
+            _hashBits = new BitArray(m);
+        }
+
+        private static float BestErrorRate(int capacity)
+        {
+            float c = (float)(1.0 / capacity);
+            if (c != 0)
+            {
+                return c;
+            }
+
+            // default
+            // http://www.cs.princeton.edu/courses/archive/spring02/cs493/lec7.pdf
+            return (float)Math.Pow(0.6185, int.MaxValue / capacity);
+        }
+
+        private static int BestK(int capacity, float errorRate)
+        {
+            return (int)Math.Round(Math.Log(2.0) * BestM(capacity, errorRate) / capacity);
+        }
+
+        private static int BestM(int capacity, float errorRate)
+        {
+            return (int)Math.Ceiling(capacity * Math.Log(errorRate, (1.0 / Math.Pow(2, Math.Log(2.0)))));
+        }
+
+        private int GetHashNumber(string input)
+        {
+            byte[] hashBytes;
+
+            using (var md5 = MD5.Create())
+            {
+                byte[] inputBytes = Encoding.ASCII.GetBytes(input);
+                hashBytes = md5.ComputeHash(inputBytes);
+            }
+
+            return BitConverter.ToInt32(hashBytes, 0);
+        }
+
+        private int ComputeHash(int primaryHash, int secondaryHash, int i)
+        {
+            int resultingHash = (primaryHash + (i * secondaryHash)) % _hashBits.Count;
+            return Math.Abs(resultingHash);
+        }
+
+        public void Add(string item)
+        {
+            // start flipping bits for each hash of item
+            int primaryHash = item.GetHashCode();
+            int secondaryHash = GetHashNumber(item);
+            for (int i = 0; i < _hashFunctionCount; i++)
+            {
+                int hash = ComputeHash(primaryHash, secondaryHash, i);
+                _hashBits[hash] = true;
+            }
+        }
+
+        public bool Contains(string item)
+        {
+            int primaryHash = item.GetHashCode();
+            int secondaryHash = GetHashNumber(item);
+            for (int i = 0; i < _hashFunctionCount; i++)
+            {
+                int hash = ComputeHash(primaryHash, secondaryHash, i);
+                if (_hashBits[hash] == false)
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
     }
 
     /// <summary>
-    /// Bloom filter.
-    /// </summary>
-    /// <typeparam name="T">Item type </typeparam>
-    public class Filter<T>
+        /// Bloom filter.
+        /// </summary>
+        /// <typeparam name="T">Item type </typeparam>
+        public class Filter<T>
     {
         private readonly int _hashFunctionCount;
         private readonly BitArray _hashBits;
@@ -105,11 +210,11 @@ namespace bloomFilter
             {
                 if (typeof(T) == typeof(string))
                 {
-                    this._getHashSecondary = HashString;
+                    _getHashSecondary = HashString;
                 }
                 else if (typeof(T) == typeof(int))
                 {
-                    this._getHashSecondary = HashInt32;
+                    _getHashSecondary = HashInt32;
                 }
                 else
                 {
@@ -118,11 +223,11 @@ namespace bloomFilter
             }
             else
             {
-                this._getHashSecondary = hashFunction;
+                _getHashSecondary = hashFunction;
             }
 
-            this._hashFunctionCount = k;
-            this._hashBits = new BitArray(m);
+            _hashFunctionCount = k;
+            _hashBits = new BitArray(m);
         }
 
         /// <summary>
@@ -139,7 +244,7 @@ namespace bloomFilter
         {
             get
             {
-                return (double)this.TrueBits() / this._hashBits.Count;
+                return (double)TrueBits() / _hashBits.Count;
             }
         }
 
@@ -151,11 +256,11 @@ namespace bloomFilter
         {
             // start flipping bits for each hash of item
             int primaryHash = item.GetHashCode();
-            int secondaryHash = this._getHashSecondary(item);
-            for (int i = 0; i < this._hashFunctionCount; i++)
+            int secondaryHash = _getHashSecondary(item);
+            for (int i = 0; i < _hashFunctionCount; i++)
             {
-                int hash = this.ComputeHash(primaryHash, secondaryHash, i);
-                this._hashBits[hash] = true;
+                int hash = ComputeHash(primaryHash, secondaryHash, i);
+                _hashBits[hash] = true;
             }
         }
 
@@ -167,11 +272,11 @@ namespace bloomFilter
         public bool Contains(T item)
         {
             int primaryHash = item.GetHashCode();
-            int secondaryHash = this._getHashSecondary(item);
-            for (int i = 0; i < this._hashFunctionCount; i++)
+            int secondaryHash = _getHashSecondary(item);
+            for (int i = 0; i < _hashFunctionCount; i++)
             {
-                int hash = this.ComputeHash(primaryHash, secondaryHash, i);
-                if (this._hashBits[hash] == false)
+                int hash = ComputeHash(primaryHash, secondaryHash, i);
+                if (_hashBits[hash] == false)
                 {
                     return false;
                 }
@@ -272,9 +377,9 @@ namespace bloomFilter
         private int TrueBits()
         {
             int output = 0;
-            foreach (bool bit in this._hashBits)
+            foreach (bool bit in _hashBits)
             {
-                if (bit == true)
+                if (bit)
                 {
                     output++;
                 }
@@ -292,8 +397,8 @@ namespace bloomFilter
         /// <returns> The <see cref="int"/>. </returns>
         private int ComputeHash(int primaryHash, int secondaryHash, int i)
         {
-            int resultingHash = (primaryHash + (i * secondaryHash)) % this._hashBits.Count;
-            return Math.Abs((int)resultingHash);
+            int resultingHash = (primaryHash + (i * secondaryHash)) % _hashBits.Count;
+            return Math.Abs(resultingHash);
         }
     }
 }
